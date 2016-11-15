@@ -1,0 +1,24 @@
+{
+  "name": "eggtimer",
+  "version": "1.0.0",
+  "description": "A GitHub webhook target that merges Pull Requests when they're ready",
+  "main": "eggtimer.js",
+  "dependencies": {
+    "node-github": "^0.0.3",
+    "parse-github-url": "^0.3.2",
+    "github-webhook-handler": "^0.6.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dgmltn/EggTimer.git"
+  },
+  "author": "Doug Melton",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/dgmltn/EggTimer/issues"
+  },
+  "homepage": "https://github.com/dgmltn/EggTimer#readme"
+}
