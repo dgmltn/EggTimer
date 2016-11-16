@@ -3,6 +3,17 @@ EggTimer
 
 A GitHub webhook target that merges Pull Requests when they're ready.
 
+![](https://i.stack.imgur.com/RgWvA.png)
+
+Description
+===========
+
+EggTimer runs as a node script, listening to events (webhooks) from your GitHub repositories. It monitors pull requests, pull request reviews, and changes in status. When the pull request is reviews and approved, and 1 or more tests (checks) have been run, and the pull request is mergeable, then boom!, it's merged! Optionally the branch can be deleted at the same time.
+
+This eliminates one of the headaches of a reviewer: the minutes and hours spent waiting for tests to finish after code has been reviewed, to merge in the finished branch.
+
+It's my solution to my own [StackOverflow Question](http://stackoverflow.com/questions/40391344/automatically-merge-verified-and-tested-github-pull-requests/40398678#40398678)
+
 Configuration
 =============
 
