@@ -1,7 +1,7 @@
 const fs = require('fs');
 const http = require('http');
 const githubWebhookHandler = require('github-webhook-handler');
-const nodeGithub = require('node-github');
+const nodeGithub = require('github');
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Setup
@@ -131,21 +131,23 @@ function mergeIfReady(url) {
         mergePullRequest(url, 
             function(err, res) {
                 if (err) {
+                    console.log("Error: could not merge: " + err);
                     delete prs[url].done;
                     return;
                 }
                 console.log("MERGED!");
 
-                //TODO: https://developer.github.com/v3/git/refs/#delete-a-reference
-                deleteReference(url,
-                    function(err, res) {
-                        if (err) {
-                            console.log("Error: could not delete ref: " + err);
-                            return;
+                if (CONFIG.delete_after_merge) {
+                    deleteReference(url,
+                        function(err, res) {
+                            if (err) {
+                                console.log("Error: could not delete ref: " + err);
+                                return;
+                            }
+                            console.log("DELETED!");
                         }
-                        console.log("DELETED!");
-                    }
-                );
+                    );
+                }
             }
         );
     }
@@ -162,14 +164,14 @@ function deleteReference(url, callback) {
     var params = parsePullRequestUrl(url);
     params.ref = 'heads/' + prs[url].ref;
     GITHUB.authenticate(GITHUB_AUTHENTICATION);
-    GITHUB.gitdata.deleteReference();
+    GITHUB.gitdata.deleteReference(params, callback);
 }
 
 function parsePullRequestUrl(url) {
     const re = /^https?:\/\/([^\/]+)\/repos\/([^\/]+)\/([^\/]+)\/pulls\/(\d+)$/;
     var match = re.exec(url);
     return {
-        user: match[2],
+        owner: match[2],
         repo: match[3],
         number: match[4]
     };
