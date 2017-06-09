@@ -4,7 +4,7 @@
   "description": "A GitHub webhook target that merges Pull Requests when they're ready",
   "main": "eggtimer.js",
   "dependencies": {
-    "github": "6.0.4",
+    "github": "9.2.0",
     "parse-github-url": "^0.3.2",
     "github-webhook-handler": "^0.6.0"
   },
