@@ -55,6 +55,7 @@ HANDLER.on('error', function (err) {
   console.error('Error:', err.message);
 });
 
+// https://developer.github.com/v3/activity/events/types/#pullrequestreviewevent
 HANDLER.on('pull_request_review', function(event) {
     const url = event.payload.pull_request.url;
     const head_sha = event.payload.pull_request.head.sha;
@@ -70,6 +71,7 @@ HANDLER.on('pull_request_review', function(event) {
     mergeIfReady(url);
 });
 
+// https://developer.github.com/v3/activity/events/types/#pullrequestevent
 HANDLER.on('pull_request', function(event) {
     const url = event.payload.pull_request.url;
     const head_sha = event.payload.pull_request.head.sha;
@@ -82,17 +84,48 @@ HANDLER.on('pull_request', function(event) {
     mergeIfReady(url);
 });
 
+// https://developer.github.com/v3/activity/events/types/#statusevent
 HANDLER.on('status', function(event) {
     const sha = event.payload.sha;
     const context = event.payload.context;
     const state = event.payload.state;
+    var success = false;
+    switch (state) {
+        case 'success':
+            success = true;
+            break;
+        case 'pending':
+        case 'failure':
+        case 'error':
+            // success = false, still
+            break;
+        default:
+            console.error("Unknown check state '" + state + "'. success = false");
+            break;
+    }
+    console.log(url + " -> status");
+
     if (sha in commits) {
         const url = commits[sha];
-        console.log(url + " -> status");
         ensurePr(url, sha);
-        prs[url].checks[context] = state;
+        prs[url].checks[context] = success;
     }
-    mergeIfReady(url);
+    else {
+        const owner = event.payload.repository.owner.login;
+        const repo = event.payload.repository.name;
+        lookupPullRequest(owner, repo, sha, function(err, url) {
+            if (err) {
+                console.error("Can't find PR for sha " + sha + ": " + err);
+                return;
+            }
+
+            ensurePr(url, sha);
+            prs[url].checks[context] = success;
+            populateMergeable(url);
+            populateReviews(url);
+            mergeIfReady(url);
+        });
+    }
 });
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -157,23 +190,24 @@ function mergeIfReady(url) {
 
         // APPROVED!
         prs[url].done = true;
-        console.log("APPROVED!");
+        console.log("APPROVED (" + url + ")!");
 
         const deleteCallback = function(err, res) {
             if (err) {
-                console.log("Error: could not delete ref: " + err);
+                console.error("Error: could not delete ref: " + err);
                 return;
             }
-            console.log("DELETED!");
+            delete prs[url];
+            console.log("DELETED (" + url + ")!");
         };
 
         const mergeCallback = function(err, res) {
             if (err) {
-                console.log("Error: could not merge: " + err);
+                console.error("Error: could not merge: " + err);
                 delete prs[url].done;
                 return;
             }
-            console.log("MERGED!");
+            console.log("MERGED (" + url + ")!");
 
             if (CONFIG.delete_after_merge) {
                 deleteReference(url, deleteCallback);
@@ -196,6 +230,32 @@ function deleteReference(url, callback) {
     params.ref = 'heads/' + prs[url].ref;
     GITHUB.authenticate(GITHUB_AUTHENTICATION);
     GITHUB.gitdata.deleteReference(params, callback);
+}
+
+// Finds the PR URL associated with the given head SHA
+function lookupPullRequest(owner, repo, sha, callback) {
+    const params = {
+        owner: owner,
+        repo: repo
+    };
+    GITHUB.pullRequests.getAll(params, function(err, res) {
+        if (err) {
+            console.log("err with pr.get: " + err);
+            callback(err, null);
+            return;
+        }
+
+        for (var i in res.data) {
+            const pr = res.data[i];
+            if (pr.head.sha == sha) {
+                const url = pr.url;
+                callback(null, url);
+                return;
+            }
+        }
+
+        callback("PR not found: (" + owner + ", " + repo + ", " + sha + ")", null);
+    });
 }
 
 function parsePullRequestUrl(url) {
