@@ -26,8 +26,8 @@ const GITHUB_AUTHENTICATION = { type: 'token', username: CONFIG.github_username,
 //             'context2': true|false
 //         },
 //         reviews: {
-//             'id1': true|false,
-//             'id2': true|false
+//             'user1': true|false,
+//             'user2': true|false
 //         },
 //         mergeable: true|false
 //     }
@@ -59,12 +59,9 @@ HANDLER.on('error', function (err) {
 HANDLER.on('pull_request_review', function(event) {
     const url = event.payload.pull_request.url;
     const head_sha = event.payload.pull_request.head.sha;
-    const id = event.payload.id;
-    const approved = event.payload.review.state.toLowerCase() == "approved";
     const ref = event.payload.pull_request.head.ref;
     console.log(url + " -> pull_request_review");
     ensurePr(url, head_sha);
-    prs[url].reviews[id] = approved;
     prs[url].ref = ref;
     populateMergeable(url);
     populateReviews(url);
@@ -103,10 +100,10 @@ HANDLER.on('status', function(event) {
             console.error("Unknown check state '" + state + "'. success = false");
             break;
     }
-    console.log(url + " -> status");
 
     if (sha in commits) {
         const url = commits[sha];
+        console.log(url + " -> status");
         ensurePr(url, sha);
         prs[url].checks[context] = success;
     }
@@ -119,6 +116,7 @@ HANDLER.on('status', function(event) {
                 return;
             }
 
+            console.log(url + " -> status");
             ensurePr(url, sha);
             prs[url].checks[context] = success;
             populateMergeable(url);
@@ -159,16 +157,20 @@ function populateMergeable(url) {
     }, 10000);
 }
 
-// GET pr reviews and check their approved status
+// GET pr reviews and check their approved status. Replace existing reviews.
 function populateReviews(url) {
     const params = parsePullRequestUrl(url);
     GITHUB.pullRequests.getReviews(params,
         function(err, res) {
+            prs[url].reviews = {};
+            var i, review, user, approved;
             for (i in res.data) {
-                const review = res.data[i];
-                const id = review.id;
-                const approved = review.state.toLowerCase() == "approved";
-                prs[url].reviews[id] = approved;
+                review = res.data[i];
+                user = review.user.login;
+                // Since reviews are returned in chronological order, the last
+                // one found is the most recent. We'll use that one.
+                approved = review.state.toLowerCase() == 'approved';
+                prs[url].reviews[user] = approved;
             }
 
             mergeIfReady(url);
