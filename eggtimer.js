@@ -101,28 +101,27 @@ HANDLER.on('status', function(event) {
             break;
     }
 
-    if (sha in commits) {
-        const url = commits[sha];
+    const processUrl = function(err, url) {
+        if (err) {
+            console.error(err);
+            return;
+        }
+
         console.log(url + " -> status");
         ensurePr(url, sha);
         prs[url].checks[context] = success;
+        populateMergeable(url);
+        populateReviews(url);
+        mergeIfReady(url);
+    };
+
+    if (sha in commits) {
+        processUrl(null, commits[sha]);
     }
     else {
         const owner = event.payload.repository.owner.login;
         const repo = event.payload.repository.name;
-        lookupPullRequest(owner, repo, sha, function(err, url) {
-            if (err) {
-                console.error("Can't find PR for sha " + sha + ": " + err);
-                return;
-            }
-
-            console.log(url + " -> status");
-            ensurePr(url, sha);
-            prs[url].checks[context] = success;
-            populateMergeable(url);
-            populateReviews(url);
-            mergeIfReady(url);
-        });
+        lookupPullRequest(owner, repo, sha, processUrl);
     }
 });
 
@@ -150,6 +149,10 @@ function populateMergeable(url) {
         const params = parsePullRequestUrl(url);
         GITHUB.pullRequests.get(params,
             function(err, pr) {
+                if (!(url in prs)) {
+                    console.error(url + " not found in prs hash");
+                    return;
+                }
                 prs[url].mergeable = !!pr.data.mergeable;
                 mergeIfReady(url);
             }
@@ -159,17 +162,27 @@ function populateMergeable(url) {
 
 // GET pr reviews and check their approved status. Replace existing reviews.
 function populateReviews(url) {
+    console.log("populateReviews(" + url + ")");
     const params = parsePullRequestUrl(url);
     GITHUB.pullRequests.getReviews(params,
         function(err, res) {
+            if (!(url in prs)) {
+                console.error(url + " not found in prs hash");
+                return;
+            }
+
+            // A bug in 'github' node module?
+            if ('data' in res) { res = res.data; }
+
             prs[url].reviews = {};
-            var i, review, user, approved;
-            for (i in res.data) {
-                review = res.data[i];
-                user = review.user.login;
+            for (var i in res) {
+                console.log("i = " + i);
+                var review = res[i];
+                console.log("review = " + JSON.stringify(review, null, " "));
+                var user = review.user.login;
                 // Since reviews are returned in chronological order, the last
                 // one found is the most recent. We'll use that one.
-                approved = review.state.toLowerCase() == 'approved';
+                var approved = review.state.toLowerCase() == 'approved';
                 prs[url].reviews[user] = approved;
             }
 
@@ -221,6 +234,10 @@ function mergeIfReady(url) {
 }
 
 function mergePullRequest(url, callback) {
+    if (!(url in prs)) {
+        console.error(url + " not found in prs hash");
+        return;
+    }
     const params = parsePullRequestUrl(url);
     params.sha = prs[url].head_sha;
     GITHUB.authenticate(GITHUB_AUTHENTICATION);
@@ -228,6 +245,10 @@ function mergePullRequest(url, callback) {
 }
 
 function deleteReference(url, callback) {
+    if (!(url in prs)) {
+        console.error(url + " not found in prs hash");
+        return;
+    }
     const params = parsePullRequestUrl(url);
     params.ref = 'heads/' + prs[url].ref;
     GITHUB.authenticate(GITHUB_AUTHENTICATION);
